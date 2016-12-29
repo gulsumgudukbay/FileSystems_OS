@@ -74,6 +74,9 @@ void print_volume_details()
 {
 	int i, j;
 
+	get_sector (volumesector, 0);
+	printf ("volume sector retrieved\n");
+
 	for (i = 0; i < SECTORSIZE; ++i) {
 		printf ("%03x: %02x %c \n", i, volumesector[i], volumesector[i]);
 
@@ -158,14 +161,42 @@ void print_volume_details()
 	printf ("\n");
 }
 
+void print_root_dir()
+{
+	int i, j;
+	char c;
+
+	get_block( cur_block,6);
+
+	i = 0;
+	while( c = cur_block[i] )
+	{
+		printf("filename: ");
+		for( j = i; j < 11 + i; j++)
+		{
+			printf("%c", cur_block[j]);
+		}
+		printf("\t size: %d", *((int*)(&cur_block[i+0x1c])));
+		printf("\n");
+		i += 32;
+	}
+
+}
+
 
 void print_block (unsigned char *s)
 {
 	int i;
 
+	for( i = 0; i < 32; i++)
+	{
+		printf ("%02d ", i);
+	}
+	printf("\n");
+
 	for (i = 0; i < BLOCKSIZE; ++i) {
-		printf ("%c ", (unsigned char) s[i]);
-		if ((i+1) % 16 == 0)
+		printf ("%02x ", (unsigned char) s[i]);
+		if ((i+1) % 32 == 0)
 			printf ("\n");
 	}
 
@@ -181,21 +212,14 @@ int main(int argc, char *argv[])
 
 	strcpy (diskname, argv[1]);
 
-        disk_fd = open (diskname, O_RDWR);
+  disk_fd = open (diskname, O_RDWR);
 	if (disk_fd < 0) {
 		printf ("could not open the disk image\n");
 		exit (1);
 	}
 
-	get_sector (volumesector, 0);
-	printf ("volume sector retrieved\n");
-
-	print_sector(volumesector);
 	print_volume_details();
-
-
-	get_block( cur_block,6);
-	print_block( cur_block);
+	print_root_dir();
 
 	close (disk_fd);
 	return (0);
