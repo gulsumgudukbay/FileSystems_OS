@@ -52,7 +52,7 @@ int get_block (unsigned char *buf, int snum)
 	if (n == BLOCKSIZE)
 		return (0);
 	else {
-		printf ("sector number %d invalid or read error.\n", snum);
+		printf ("block number %d invalid or read error.\n", snum);
 		exit (1);
 	}
 }
@@ -76,11 +76,6 @@ void print_volume_details()
 
 	get_sector (volumesector, 0);
 	printf ("volume sector retrieved\n");
-
-	for (i = 0; i < SECTORSIZE; ++i) {
-		printf ("%03x: %02x %c \n", i, volumesector[i], volumesector[i]);
-
-	}
 
 	i = 0;
 	printf( "jump instr: %02x\n", volumesector[i]);
@@ -164,6 +159,9 @@ void print_volume_details()
 void print_root_dir()
 {
 	int i, j;
+	int size;
+	int blocks;
+	int start;
 	char c;
 
 	get_block( cur_block,6);
@@ -176,13 +174,69 @@ void print_root_dir()
 		{
 			printf("%c", cur_block[j]);
 		}
-		printf("\t size: %d", *((int*)(&cur_block[i+0x1c])));
+		size =  *((int*)(&cur_block[i+0x1c]));
+		blocks = *((int*)(&cur_block[i+0x1c])) / 4096 + (*((int*)(&cur_block[i+0x1c])) % 4096 ? 1 : 0);
+		start = cur_block[i+0x1a] + (cur_block[i+0x14] << 16);
+		printf("\t size: %6d (%2d blocks)", size, blocks);
+		printf("\t starts at block: %d", start);
 		printf("\n");
 		i += 32;
 	}
 
 }
 
+void print_blocks_of( char* filename)
+{
+	int i, j, k;
+	int size;
+	int blocks;
+	int start;
+	int filefound;
+	char c;
+	char carr[10];
+
+	get_block( cur_block,6);
+
+	i = 0;
+	filefound = 0;
+	while( c = cur_block[i] )
+	{
+		k = 0;
+		for( j = i; cur_block[j] != 0x20 && cur_block[j]; j++)
+		{
+			carr[k++] = cur_block[j];
+		}
+		carr[k++] = '.';
+		for( j = i + 8; j < 11 + i; j++)
+		{
+			carr[k++] = cur_block[j];
+		}
+		carr[k] = 0;
+
+		if( strcmp( carr, filename) == 0)
+		{
+			filefound = ~filefound;
+			printf( "\nmatched file:\n");
+			printf( "%s", carr);
+			size =  *((int*)(&cur_block[i+0x1c]));
+			blocks = *((int*)(&cur_block[i+0x1c])) / 4096 + (*((int*)(&cur_block[i+0x1c])) % 4096 ? 1 : 0);
+			start = cur_block[i+0x1a] + (cur_block[i+0x14] << 16);
+			printf("\t size: %6d (%2d blocks)", size, blocks);
+			printf("\t starts at block: %d", start);
+			printf("\n");
+		}
+		i += 32;
+	}
+
+	if(!filefound)
+	{
+		printf("\nfile not found \n");
+	}
+	else
+	{
+
+	}
+}
 
 void print_block (unsigned char *s)
 {
@@ -191,6 +245,14 @@ void print_block (unsigned char *s)
 	for( i = 0; i < 32; i++)
 	{
 		printf ("%02d ", i);
+	}
+	printf("\n");
+	for( i = 0; i < 32; i++)
+	{
+		if( i % 4  == 3)
+			printf ("  *");
+		else
+			printf ("  |");
 	}
 	printf("\n");
 
@@ -220,6 +282,10 @@ int main(int argc, char *argv[])
 
 	print_volume_details();
 	print_root_dir();
+	print_blocks_of( argv[2]);
+
+	get_block(cur_block, 4);
+	print_block(cur_block);
 
 	close (disk_fd);
 	return (0);
