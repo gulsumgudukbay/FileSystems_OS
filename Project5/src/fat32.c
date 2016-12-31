@@ -177,7 +177,7 @@ void print_root_dir()
 	int size;
 	int blocks;
 	int start;
-	char c;
+	unsigned char c;
 
 	get_block( cur_block,6);
 
@@ -185,7 +185,10 @@ void print_root_dir()
 	while( c = cur_block[i] )
 	{
 		if( c == 0xe5)
+		{
+			i += 32;
 			continue;
+		}
 
 		printf("filename: ");
 		for( j = i; j < 11 + i; j++)
@@ -263,6 +266,12 @@ void print_blocks_of( char* filename)
 		{
 			if( i >= size)
 			{
+				if( !i)
+				{
+					printf("empty file\n");
+					return;
+				}
+
 				printf("corrupt file\n");
 				return;
 			}
@@ -333,8 +342,13 @@ void delete_block(char *filename){
 		i = 0;
 		while( next != 0x0fffffff)
 		{
-			if( i >= size)
+			if( i >= blocks)
 			{
+				if( !i)
+				{
+					*((int*)(&cur_block[start << 2])) = 0;
+					return;
+				}
 				printf("corrupt file\n");
 				return;
 			}
@@ -377,8 +391,10 @@ void print_block (unsigned char *s)
 	printf ("\n");
 }
 
+
 int main(int argc, char *argv[])
 {
+
 	if (argc < 2) {
 		printf ("wrong usage\n");
 		exit (1);
@@ -392,24 +408,31 @@ int main(int argc, char *argv[])
 		exit (1);
 	}
 
-	get_block(cur_block, 4);
-	print_block(cur_block);
+	if( strcmp(argv[2], "-p") == 0)
+	{
+		if( strcmp(argv[3], "volumeinfo") == 0)
+		{
+			print_volume_details();
+		}
 
-	printf("VOLUME DETAILS\n");
-	print_volume_details();
+		if( strcmp(argv[3], "rootdir") == 0)
+		{
+			print_root_dir();
+		}
 
-	printf("ROOT DIR \n");
-	print_root_dir();
-	print_blocks_of( argv[2]);
+		if( strcmp(argv[3], "blocks") == 0)
+		{
+			print_blocks_of( argv[4]);
+			// filename = argv[4]
+		}
+	}
 
-	printf("DELETE\n");
-	delete_block( argv[2]);
-	print_blocks_of( argv[2]);
+	if( strcmp(argv[2], "-d") == 0)
+	{
 
-	printf("ROOT DIR \n");
-	print_root_dir();
-	get_block(cur_block, 4);
-	print_block(cur_block);
+		delete_block( argv[3]);
+		// filename = argv[3]
+	}
 
 	close (disk_fd);
 	return (0);
