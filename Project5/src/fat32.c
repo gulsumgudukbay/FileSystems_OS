@@ -57,6 +57,21 @@ int get_block (unsigned char *buf, int snum)
 	}
 }
 
+int write_block (unsigned char *buf, int snum)
+{
+	off_t offset;
+	int n;
+	offset = snum * BLOCKSIZE;
+	lseek (disk_fd, offset, SEEK_SET);
+	n  = write (disk_fd, buf, BLOCKSIZE);
+	if (n == BLOCKSIZE)
+		return (0);
+	else {
+		printf ("block number %d invalid or read error.\n", snum);
+		exit (1);
+	}
+}
+
 void print_sector (unsigned char *s)
 {
 	int i;
@@ -169,6 +184,9 @@ void print_root_dir()
 	i = 0;
 	while( c = cur_block[i] )
 	{
+		if( c == 0xe5)
+			continue;
+
 		printf("filename: ");
 		for( j = i; j < 11 + i; j++)
 		{
@@ -219,7 +237,7 @@ void print_blocks_of( char* filename)
 			printf( "\nmatched file:\n");
 			printf( "%s", carr);
 			size =  *((int*)(&cur_block[i+0x1c]));
-			blocks = *((int*)(&cur_block[i+0x1c])) / 4096 + (*((int*)(&cur_block[i+0x1c])) % 4096 ? 1 : 0);
+			blocks = size / 4096 + (size % 4096 ? 1 : 0);
 			start = cur_block[i+0x1a] + (cur_block[i+0x14] << 16);
 			printf("\t size: %6d (%2d blocks)", size, blocks);
 			printf("\t starts at block: %d", start);
@@ -234,13 +252,107 @@ void print_blocks_of( char* filename)
 	}
 	else
 	{
+		int next;
 
+		get_block(cur_block, 4);
+		printf( "blocks: \n");
+
+		next = start;
+		i = 0;
+		while( next != 0x0fffffff)
+		{
+			if( i >= size)
+			{
+				printf("corrupt file\n");
+				return;
+			}
+
+			printf("%d: %d\n", i++, next);
+			next = *((int*)(&cur_block[next << 2]));
+		}
+	}
+}
+///////////////////////////////////////////////////////////////////////
+
+void delete_block(char *filename){
+	int i, j, k;
+	int size;
+	int blocks;
+	int start;
+	int filefound;
+	char c;
+	char carr[10];
+
+	get_block( cur_block,6);
+
+	i = 0;
+	filefound = 0;
+	while( c = cur_block[i] )
+	{
+		k = 0;
+		for( j = i; cur_block[j] != 0x20 && cur_block[j]; j++)
+		{
+			carr[k++] = cur_block[j];
+		}
+		carr[k++] = '.';
+		for( j = i + 8; j < 11 + i; j++)
+		{
+			carr[k++] = cur_block[j];
+		}
+		carr[k] = 0;
+
+		if( strcmp( carr, filename) == 0)
+		{
+			filefound = ~filefound;
+			printf( "\nfile to be deleted:\n");
+			printf( "%s", carr);
+			size =  *((int*)(&cur_block[i+0x1c]));
+			blocks = size / 4096 + (size % 4096 ? 1 : 0);
+			start = cur_block[i+0x1a] + (cur_block[i+0x14] << 16);
+			printf("\t size: %6d (%2d blocks)", size, blocks);
+			printf("\t starts at block: %d", start);
+			printf("\n");
+			cur_block[i] = 0xE5;
+			write_block( cur_block, 6);
+		}
+		i += 32;
+	}
+
+	if(!filefound)
+	{
+		printf("\nfile not found \n");
+	}
+	else
+	{
+		int next, prev;
+
+		get_block(cur_block, 4);
+		printf( "blocks to be deleted: \n");
+
+		next = start;
+		i = 0;
+		while( next != 0x0fffffff)
+		{
+			if( i >= size)
+			{
+				printf("corrupt file\n");
+				return;
+			}
+
+			printf("%d: %d\n", i++, next);
+			prev = next;
+			next = *((int*)(&cur_block[next << 2]));
+			*((int*)(&cur_block[prev << 2])) = 0;
+		}
+
+		write_block( cur_block, 4);
 	}
 }
 
 void print_block (unsigned char *s)
 {
 	int i;
+
 
 	for( i = 0; i < 32; i++)
 	{
@@ -280,10 +392,22 @@ int main(int argc, char *argv[])
 		exit (1);
 	}
 
+	get_block(cur_block, 4);
+	print_block(cur_block);
+
+	printf("VOLUME DETAILS\n");
 	print_volume_details();
+
+	printf("ROOT DIR \n");
 	print_root_dir();
 	print_blocks_of( argv[2]);
 
+	printf("DELETE\n");
+	delete_block( argv[2]);
+	print_blocks_of( argv[2]);
+
+	printf("ROOT DIR \n");
+	print_root_dir();
 	get_block(cur_block, 4);
 	print_block(cur_block);
 
